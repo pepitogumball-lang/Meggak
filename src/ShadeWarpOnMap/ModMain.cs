@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Reflection;
 using Modding;
 using UnityEngine;
 
@@ -12,7 +13,7 @@ namespace ShadeWarpOnMap
 
         public override string GetVersion()
         {
-            return "1.0.0";
+            return "1.0.1";
         }
 
         public override void Initialize()
@@ -83,13 +84,18 @@ namespace ShadeWarpOnMap
 
                 hero.transform.position = target;
 
-                hero.ResetMotion();
-                hero.CancelAttack();
-                hero.CancelDash();
-                hero.CancelRecoilHorizontal();
-                hero.CancelDamageRecoil();
-                hero.RegainControl();
-                hero.ResetLook();
+                // En la versión móvil, los métodos ResetMotion, CancelAttack, etc. son privados.
+                // Invocarlos por reflexión para no causar errores de compilación, o ignorarlos si fallan.
+                InvokePrivateMethod(hero, "ResetMotion");
+                InvokePrivateMethod(hero, "CancelAttack");
+                InvokePrivateMethod(hero, "CancelDash");
+                InvokePrivateMethod(hero, "CancelRecoilHorizontal");
+                InvokePrivateMethod(hero, "CancelDamageRecoil");
+                
+                // RegainControl sí suele ser público en PC, pero por si acaso lo invocamos por reflexión
+                // o comprobamos si es público. Como sabemos que en móvil es privado, usamos reflexión.
+                InvokePrivateMethod(hero, "RegainControl");
+                InvokePrivateMethod(hero, "ResetLook");
 
                 Debug.Log(string.Format(
                     "[ShadeWarpOnMap] Warped to shade at ({0:0.00}, {1:0.00}) in scene '{2}'.",
@@ -100,6 +106,27 @@ namespace ShadeWarpOnMap
             catch (Exception ex)
             {
                 Debug.LogError("[ShadeWarpOnMap] Failed to warp to shade: " + ex);
+            }
+        }
+
+        private static void InvokePrivateMethod(object target, string methodName)
+        {
+            if (target == null) return;
+            
+            try
+            {
+                MethodInfo method = target.GetType().GetMethod(
+                    methodName, 
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                
+                if (method != null)
+                {
+                    method.Invoke(target, null);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[ShadeWarpOnMap] Could not invoke method " + methodName + ": " + ex.Message);
             }
         }
     }
