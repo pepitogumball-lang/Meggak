@@ -1,0 +1,43 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unpack Managed.zip if present
+        shell: pwsh
+        run: |
+          if (Test-Path "Managed.zip") {
+            Expand-Archive -Path "Managed.zip" -DestinationPath "." -Force
+            Remove-Item "Managed.zip" -Force
+          }
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        working-directory: src/ShadeWarpOnMap
+        run: dotnet restore
+
+      - name: Build
+        working-directory: src/ShadeWarpOnMap
+        run: dotnet build -c Release --no-restore
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShadeWarpOnMap-dll
+          path: src/ShadeWarpOnMap/bin/Release/net472/ShadeWarpOnMap.dll
