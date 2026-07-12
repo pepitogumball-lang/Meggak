@@ -1,0 +1,61 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unpack Managed.zip if present
+        shell: pwsh
+        run: |
+          if (Test-Path "Managed.zip") {
+            Expand-Archive -Path "Managed.zip" -DestinationPath "." -Force
+            Remove-Item "Managed.zip" -Force
+          }
+
+      - name: Normalize Managed folder
+        shell: pwsh
+        run: |
+          if (Test-Path "Managed\Assembly-CSharp.dll") {
+            Write-Host "Managed folder already in root."
+            exit 0
+          }
+
+          $asm = Get-ChildItem -Path . -Recurse -Filter Assembly-CSharp.dll | Select-Object -First 1
+          if (-not $asm) {
+            throw "Assembly-CSharp.dll not found. Make sure the repository contains Managed/ or Managed.zip."
+          }
+
+          $sourceDir = $asm.Directory.FullName
+          Write-Host "Found Managed DLLs in: $sourceDir"
+          New-Item -ItemType Directory -Force -Path "Managed" | Out-Null
+          Get-ChildItem -Path $sourceDir -File | Copy-Item -Destination "Managed" -Force
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        working-directory: src/ShadeWarpOnMap
+        run: dotnet restore
+
+      - name: Build
+        working-directory: src/ShadeWarpOnMap
+        run: dotnet build -c Release --no-restore
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShadeWarpOnMap-dll
+          path: src/ShadeWarpOnMap/bin/Release/net472/ShadeWarpOnMap.dll
